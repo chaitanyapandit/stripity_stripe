@@ -163,13 +163,7 @@ defmodule Stripe.Subscription do
 
   Takes the subscription `id` and an optional map of `params`.
 
-  ### Deprecated Usage
-
-  Passing a map with `at_period_end: true` to `Subscription.delete/2`
-  is deprecated.  Use `Subscription.update/2` with
-  `cancel_at_period_end: true` instead.
   """
-  @deprecated "Use Stripe.Subscription.update/2 with `cancel_at_period_end: true`"
   @spec delete(Stripe.id() | t, %{at_period_end: true}) :: {:ok, t} | {:error, Stripe.Error.t()}
   def delete(id, %{at_period_end: true}), do: update(id, %{cancel_at_period_end: true})
 
@@ -181,10 +175,21 @@ defmodule Stripe.Subscription do
     |> make_request()
   end
 
+  @spec delete(Stripe.id() | t, params, Stripe.options()) :: {:ok, t} | {:error, Stripe.Error.t()}
+  when params: %{
+         optional(:prorate) => boolean,
+         optional(:invoice_now) => boolean
+       }
+  def delete(id, params, opts \\ []) when is_list(opts) do
+    new_request(opts)
+    |> put_endpoint(@plural_endpoint <> "/#{get_id!(id)}")
+    |> put_method(:delete)
+    |> put_params(params)
+    |> make_request()
+  end
+
   @doc """
-  DEPRECATED: Use `Subscription.update/3` with `cancel_at_period_end: true` instead.
   """
-  @deprecated "Use Stripe.Subscription.update/3 with `cancel_at_period_end: true`"
   @spec delete(Stripe.id() | t, %{at_period_end: true}, Stripe.options()) ::
           {:ok, t} | {:error, Stripe.Error.t()}
   def delete(id, %{at_period_end: true}, opts) when is_list(opts),
