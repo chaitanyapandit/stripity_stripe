@@ -22,6 +22,7 @@ defmodule Stripe.Converter do
     checkout.session
     country_spec
     coupon
+    credit_note
     customer
     discount
     dispute
@@ -30,20 +31,34 @@ defmodule Stripe.Converter do
     file
     invoice
     invoiceitem
+    issuing.authorization
+    issuing.card
+    issuing.card_details
+    issuing.cardholder
+    issuing.dispute
+    issuing.transaction
     line_item
     list
     oauth
     order
     order_return
+    payment_intent
+    payment_method
     payout
     plan
     product
     recipient
     refund
+    review
+    setup_intent
     sku
     source
     subscription
     subscription_item
+    subscription_schedule
+    tax_rate
+    tax_id
+    topup
     transfer
     transfer_reversal
     token
@@ -54,8 +69,12 @@ defmodule Stripe.Converter do
   @spec convert_value(any) :: any
   defp convert_value(%{"object" => object_name} = value) when is_binary(object_name) do
     case Enum.member?(@supported_objects, object_name) do
-      true -> convert_stripe_object(value)
-      false -> convert_map(value)
+      true ->
+        convert_stripe_object(value)
+
+      false ->
+        warn_unknown_object(value)
+        convert_map(value)
     end
   end
 
@@ -98,6 +117,16 @@ defmodule Stripe.Converter do
   defp convert_list(list), do: list |> Enum.map(&convert_value/1)
 
   if Mix.env() == "prod" do
+    defp warn_unknown_object(_), do: :ok
+  else
+    defp warn_unknown_object(%{"object" => object_name}) do
+      require Logger
+
+      Logger.warn("Unknown object received: #{object_name}")
+    end
+  end
+
+  if Mix.env() == "prod" do
     defp check_for_extra_keys(_, _), do: :ok
   else
     defp check_for_extra_keys(struct_keys, map) do
@@ -128,7 +157,7 @@ defmodule Stripe.Converter do
 
         details = "#{module_name}: #{inspect(extra_keys)}"
         message = "Extra keys were received but ignored when converting #{details}"
-        Logger.debug(message)
+        Logger.warn(message)
       end
 
       :ok

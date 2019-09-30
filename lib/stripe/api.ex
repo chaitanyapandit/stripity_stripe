@@ -16,16 +16,16 @@ defmodule Stripe.API do
   @typep http_failure :: {:error, term}
 
   @pool_name __MODULE__
-  @api_version "2018-11-08; checkout_sessions_beta=v1"
+  @api_version "2019-05-16"
 
   @doc """
   In config.exs your implicit or expicit configuration is:
     config :stripity_stripe,
-      json_library: Jason # defaults to Poison but can be configured to Jason
+      json_library: Poison # defaults to Jason but can be configured to Poison
   """
   @spec json_library() :: module
   def json_library() do
-    Config.resolve(:json_library, Poison)
+    Config.resolve(:json_library, Jason)
   end
 
   def supervisor_children do
@@ -72,9 +72,7 @@ defmodule Stripe.API do
     Map.merge(existing_headers, %{
       "Accept" => "application/json; charset=utf8",
       "Accept-Encoding" => "gzip",
-      "Connection" => "keep-alive",
-      "User-Agent" => "Stripe/v1 stripity-stripe/#{@api_version}",
-      "Stripe-Version" => @api_version
+      "Connection" => "keep-alive"
     })
   end
 
@@ -121,6 +119,16 @@ defmodule Stripe.API do
     Map.put(existing_headers, "Stripe-Account", account_id)
   end
 
+  @spec add_api_version(headers, String.t() | nil) :: headers
+  defp add_api_version(existing_headers, nil), do: add_api_version(existing_headers, @api_version)
+
+  defp add_api_version(existing_headers, api_version) do
+    Map.merge(existing_headers, %{
+      "User-Agent" => "Stripe/v1 stripity-stripe/#{api_version}",
+      "Stripe-Version" => api_version
+    })
+  end
+
   @spec add_default_options(list) :: list
   defp add_default_options(opts) do
     [:with_body | opts]
@@ -135,8 +143,28 @@ defmodule Stripe.API do
     end
   end
 
+  @spec add_options_from_config(list) :: list
+  defp add_options_from_config(opts) do
+    if is_list(Stripe.Config.resolve(:hackney_opts)) do
+      opts ++ Stripe.Config.resolve(:hackney_opts)
+    else
+      opts
+    end
+  end
+
   @doc """
   A low level utility function to make a direct request to the Stripe API
+
+  ## Setting the api key
+
+      request(%{}, :get, "/customers", %{}, api_key: "bogus key")
+
+  ## Setting api version
+
+  The api version defaults to #{@api_version} but a custom version can be passed
+  in as follows:
+
+      request(%{}, :get, "/customers", %{}, api_version: "2018-11-04")
 
   ## Connect Accounts
 
@@ -218,21 +246,24 @@ defmodule Stripe.API do
   """
   @spec oauth_request(method, String.t(), map, String.t() | nil) ::
           {:ok, map} | {:error, Stripe.Error.t()}
-  def oauth_request(method, endpoint, body, api_key \\ nil) do
+  def oauth_request(method, endpoint, body, api_key \\ nil, opts \\ []) do
     base_url = "https://connect.stripe.com/oauth/"
     req_url = base_url <> endpoint
     req_body = Stripe.URI.encode_query(body)
+    {api_version, _opts} = Keyword.pop(opts, :api_version)
 
     req_headers =
       %{}
       |> add_default_headers()
       |> maybe_add_auth_header_oauth(endpoint, api_key)
+      |> add_api_version(api_version)
       |> Map.to_list()
 
     req_opts =
       []
       |> add_default_options()
       |> add_pool_option()
+      |> add_options_from_config()
 
     http_module().request(method, req_url, req_headers, req_body, req_opts)
     |> handle_response()
@@ -242,6 +273,7 @@ defmodule Stripe.API do
           {:ok, map} | {:error, Stripe.Error.t()}
   defp perform_request(req_url, method, body, headers, opts) do
     {connect_account_id, opts} = Keyword.pop(opts, :connect_account)
+    {api_version, opts} = Keyword.pop(opts, :api_version)
     {api_key, opts} = Keyword.pop(opts, :api_key)
 
     req_headers =
@@ -249,12 +281,14 @@ defmodule Stripe.API do
       |> add_default_headers()
       |> add_auth_header(api_key)
       |> add_connect_header(connect_account_id)
+      |> add_api_version(api_version)
       |> Map.to_list()
 
     req_opts =
       opts
       |> add_default_options()
       |> add_pool_option()
+      |> add_options_from_config()
 
     http_module().request(method, req_url, req_headers, body, req_opts)
     |> handle_response()
