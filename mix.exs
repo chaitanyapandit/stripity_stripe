@@ -98,6 +98,7 @@ defmodule Stripe.Mixfile do
         Stripe.BalanceTransaction,
         Stripe.Charge,
         Stripe.Customer,
+        Stripe.CustomerBalanceTransaction,
         Stripe.Dispute,
         Stripe.Event,
         Stripe.FileUpload,
