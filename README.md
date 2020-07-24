@@ -6,7 +6,7 @@ An Elixir library for working with [Stripe](https://stripe.com/).
 
 ## 2.x.x status
 
-[![Build Status](https://travis-ci.org/code-corps/stripity_stripe.svg?branch=master)](https://travis-ci.org/code-corps/stripity_stripe) [![Hex Docs](https://img.shields.io/badge/hex-docs-9768d1.svg)](https://hexdocs.pm/stripity_stripe)  [![Inline docs](http://inch-ci.org/github/code-corps/stripity_stripe.svg?branch=master)](http://inch-ci.org/github/code-corps/stripity_stripe?branch=master) [![Coverage Status](https://coveralls.io/repos/github/code-corps/stripity_stripe/badge.svg?branch=master)](https://coveralls.io/github/code-corps/stripity_stripe?branch=master)
+[![Build Status](https://travis-ci.org/code-corps/stripity_stripe.svg?branch=master)](https://travis-ci.org/code-corps/stripity_stripe) [![Hex Docs](https://img.shields.io/badge/hex-docs-9768d1.svg)](https://hexdocs.pm/stripity_stripe) [![Inline docs](http://inch-ci.org/github/code-corps/stripity_stripe.svg?branch=master)](http://inch-ci.org/github/code-corps/stripity_stripe?branch=master) [![Coverage Status](https://coveralls.io/repos/github/code-corps/stripity_stripe/badge.svg?branch=master)](https://coveralls.io/github/code-corps/stripity_stripe?branch=master)
 
 ## 1.x.x status
 
@@ -20,14 +20,16 @@ The actively developed line of releases is `2.x.x` and is contained within the `
 
 Below is a list of which Stripe API version recent releases of Stripity Stripe use. It only indicates the API version being called, not necessarily its compatibility. See the [Stripe API Upgrades page](https://stripe.com/docs/upgrades) for more details.
 
-`:stripity_stripe` | Stripe API Version
------------- | -------------
-`2.0.x` | `2018-02-28`
-`2.1.0 - 2.2.0` | `2018-05-21`
-`2.2.2` | `2018-08-23`
-`2.2.3 - 2.3.0` | `2018-11-08`
-`2.4.0` | `2019-05-16`
-`master` | `2019-05-16`
+Starting with stripity_stripe version 2.5.0, you can specify the Stripe API Version to use for a specific request by including the `:api_version` option. Note that while this will use a specific Stripe API Version to make the request, the library will still expect a response matching its corresponding default Stripe API Version. See the [Shared Options documentation](https://hexdocs.pm/stripity_stripe/2.7.0/Stripe.html#module-shared-options) for more details.
+
+| `:stripity_stripe` | Stripe API Version |
+| ------------------ | ------------------ |
+| `2.0.x`            | `2018-02-28`       |
+| `2.1.0 - 2.2.0`    | `2018-05-21`       |
+| `2.2.2`            | `2018-08-23`       |
+| `2.2.3 - 2.3.0`    | `2018-11-08`       |
+| `2.4.0 - 2.7.0`    | `2019-05-16`       |
+| `master`           | `2019-10-17`       |
 
 # Documentation
 
@@ -40,7 +42,7 @@ Below is a list of which Stripe API version recent releases of Stripity Stripe u
 Install the dependency by version:
 
 ```ex
-{:stripity_stripe, "~> 2.0.0"}
+{:stripity_stripe, "~> 2.0"}
 ```
 
 Or by commit reference (still awaiting hex publish rights so this is your best best for now):
@@ -90,7 +92,84 @@ config :stripity_stripe, json_library: Poison
 To set timeouts, pass opts for the http client. The default one is Hackney.
 
 ```ex
-config :stripity_stripe, hackney_opts: [{:connect_timeout, 1000}, {:recv_timeout, 5000}])
+config :stripity_stripe, hackney_opts: [{:connect_timeout, 1000}, {:recv_timeout, 5000}]
+```
+
+### Request Retries
+
+To set retries, you can pass the number of attempts and range of backoff (time between attempting the request again) in milliseconds.
+
+```ex
+config :stripity_stripe, :retries, [max_attempts: 3, base_backoff: 500, max_backoff: 2_000]
+```
+
+## Examples
+
+Stripe supports a token based, and intent based approach for processing payments. The token based approach is simpler, but it is not supported in Europe. The intents API is the way forward, and should be used for new development.
+
+### Intents
+
+Create a new `SetupIntent` object in [Stripe](https://stripe.com/docs/api/setup_intents). The created intent ID will be passed to the frontend to use with Stripe elements so the end user can enter their payment details. SetupIntents are ephemeral. It is best to create a new one each time the user reaches your payment page.
+
+```elixir
+{:ok, setup_intent} = Stripe.SetupIntent.create(%{})
+
+# Return the ID to your frontend, and pass it to the confirmCardSetup method from Stripe elements
+{:ok, setup_intent.id}
+```
+
+On the frontend, use the setup intent ID you created in conjunction with Stripe elements `confirmCardSetup` method.
+
+```javascript
+stripe.confirmCardSetup(setupIntentId, {
+  payment_method: {
+    ...
+  }
+})
+.then(result => {
+  const setupIntentId = result.setupIntent.id
+  const paymentMethodId = result.setupIntent.payment_method
+
+  // send the paymentMethodId and optionally (if needed) the setupIntentId
+})
+```
+
+With the new payment method ID, you can associate the payment method with a Stripe customer.
+
+
+Get an existing customer.
+
+```elixir
+{:ok, stripe_customer} = Stripe.Customer.retrieve(stripe_customer_id)
+```
+
+Or create a new one.
+
+```elixir
+new_customer = %{
+  email: email,
+}
+
+{:ok, stripe_customer} = Stripe.Customer.create(new_customer)
+```
+
+Attach the payment method to the customer.
+
+```elixir
+{:ok, _result} = Stripe.PaymentMethod.attach(%{customer: stripe_customer.id, payment_method: payment_method_id})
+```
+
+Now you can charge the customer using a `PaymentIntent` from [Stripe](https://stripe.com/docs/api/payment_intents). Since we used a setup intent initially, the payment intent will be authorized to make payments off session, for example to charge for a recurring subscription.
+
+```elixir
+{:ok, charge} = Stripe.PaymentIntent.create(%{
+  amount: cents_int,
+  currency: "USD",
+  customer: stripe_customer.id,
+  payment_method: payment_method_id,
+  off_session: true,
+  confirm: true
+})
 ```
 
 ## Note: Object Expansion
@@ -172,7 +251,6 @@ config :stripity_stripe, secret_key: "YOUR SECRET KEY"
 config :stripity_stripe, platform_client_id: "YOUR CONNECT PLATFORM CLIENT ID"
 ```
 
-
 ## Testing
 
 If you start contributing and you want to run mix test, first you need to export STRIPE_SECRET_KEY environment variable in the same shell as the one you will be running mix test in. All tests have the @tag disabled: false and the test runner is configured to ignore disabled: true. This helps to turn tests on/off when working in them. Most of the tests depends on the order of execution (test random seed = 0) to minimize runtime. I've tried having each tests isolated but this made it take ~10 times longer.
@@ -186,7 +264,7 @@ mix test
 
 I've tried to make the API somewhat comprehensive and intuitive. If you'd like to see things in detail be sure to have a look at the tests - they show (generally) the way the API goes together.
 
-In general, if Stripe requires some information for a given API call, you'll find that as part of the arity of the given function. For instance if you want to delete a Customer, you'll find that you *must* pass the id along:
+In general, if Stripe requires some information for a given API call, you'll find that as part of the arity of the given function. For instance if you want to delete a Customer, you'll find that you _must_ pass the id along:
 
 ```ex
 {:ok, result} = Stripe.Customers.delete "some_id"
@@ -228,6 +306,7 @@ First, you need to register your platform on Stripe Connect to obtain a `client_
 ```ex
 config :stripity_stripe, platform_client_id: "ac_???"
 ```
+
 or in an env var named `STRIPE_PLATFORM_CLIENT_ID`.
 
 Then you send your users to sign up for the stripe account using a link.
@@ -261,6 +340,7 @@ resp[:access_token]
 ```
 
 `resp` will look like this:
+
 ```ex
 %{
   token_type: "bearer",
@@ -290,7 +370,7 @@ Create a connect standalone account. Grab your development `client_id`. Put it i
 
 # Contributing
 
-Feedback, feature requests, and fixes are welcomed and encouraged.  Please make appropriate use of [Issues](https://github.com/code-corps/stripity-stripe/issues) and [Pull Requests](https://github.com/code-corps/stripity-stripe/pulls).  All code should have accompanying tests.
+Feedback, feature requests, and fixes are welcomed and encouraged. Please make appropriate use of [Issues](https://github.com/code-corps/stripity-stripe/issues) and [Pull Requests](https://github.com/code-corps/stripity-stripe/pulls). All code should have accompanying tests.
 
 # License
 
@@ -302,13 +382,13 @@ Please see [LICENSE](LICENSE) for licensing details.
 
 Why another Stripe Library? Currently there are a number of them in the Elixir world that are, well just not "done" yet. I started to fork/help but soon it became clear to me that what I wanted was
 
-* an existing/better test story
-* an API that didn't just mimic a REST interaction
-* a library that was up to date with Elixir > 1.0 and would, you know, actually *compile*.
-* function calls that returned a standard `{:ok, result}` or `{:error, message}` response
+- an existing/better test story
+- an API that didn't just mimic a REST interaction
+- a library that was up to date with Elixir > 1.0 and would, you know, actually _compile_.
+- function calls that returned a standard `{:ok, result}` or `{:error, message}` response
 
 As I began digging things up with these other libraries it became rather apparent that I was not only tweaking the API, but also ripping out a lot of the existing code... and that usually means I should probably do my own thing. So I did.
 
 ## Update
 
-As of October 18th, Rob has graciously handed over the reins to the teams at [Code Corps](https://www.codecorps.org/) and [Strumber](https://strumber.com/). To addresses the concerns Rob mentioned above and update the high level api to work with all of the Stripe API Endpoints, they have since worked to release and stripity_stripe 2.0, which is now the actively developed line of releases.
+As of October 18th, Rob has graciously handed over the reins to the teams at [Code Corps](https://www.codecorps.org/) and [Strumber](https://strumber.com/). To address the concerns Rob mentioned above and update the high level api to work with all of the Stripe API Endpoints, they have since worked to release stripity_stripe 2.0, which is now the actively developed line of releases.

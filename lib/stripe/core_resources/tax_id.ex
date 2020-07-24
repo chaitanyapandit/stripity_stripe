@@ -12,9 +12,10 @@ defmodule Stripe.TaxID do
   @type t :: %__MODULE__{
           id: Stripe.id(),
           object: String.t(),
-          created: Stripe.timestamp(),
           country: String.t(),
+          created: Stripe.timestamp(),
           customer: Stripe.id() | Stripe.Customer.t() | nil,
+          deleted: boolean | nil,
           livemode: boolean,
           type: String.t(),
           value: String.t(),
@@ -27,12 +28,18 @@ defmodule Stripe.TaxID do
           verified_address: String.t() | nil
         }
 
+  @type tax_id_data :: %{
+          type: String.t(),
+          value: String.t()
+        }
+
   defstruct [
     :id,
     :object,
-    :created,
     :country,
+    :created,
     :customer,
+    :deleted,
     :livemode,
     :type,
     :value,

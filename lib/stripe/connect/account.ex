@@ -9,7 +9,7 @@ defmodule Stripe.Account do
 
   This module does not yet support managed accounts.
 
-  Stripe API reference: https://stripe.com/docs/api#account
+  Stripe API reference: https://stripe.com/docs/api/accounts
   """
 
   use Stripe.Entity
@@ -61,7 +61,6 @@ defmodule Stripe.Account do
           business_name_kanji: String.t() | nil,
           business_tax_id_provided: boolean,
           business_vat_id_provided: boolean,
-          deleted: boolean | nil,
           dob: Stripe.Types.dob(),
           first_name: String.t() | nil,
           first_name_kana: String.t() | nil,
@@ -131,7 +130,7 @@ defmodule Stripe.Account do
   @type capabilities :: %{
           card_payments: String.t() | nil,
           legacy_payments: String.t() | nil,
-          platform_payments: String.t() | nil
+          transfers: String.t() | nil
         }
 
   @type t :: %__MODULE__{
@@ -145,6 +144,7 @@ defmodule Stripe.Account do
           country: String.t(),
           created: Stripe.timestamp() | nil,
           default_currency: String.t(),
+          deleted: boolean | nil,
           details_submitted: boolean,
           email: String.t() | nil,
           external_accounts: Stripe.List.t(Stripe.BankAccount.t() | Stripe.Card.t()),
@@ -168,6 +168,7 @@ defmodule Stripe.Account do
     :country,
     :created,
     :default_currency,
+    :deleted,
     :details_submitted,
     :email,
     :external_accounts,

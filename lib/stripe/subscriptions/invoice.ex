@@ -29,11 +29,13 @@ defmodule Stripe.Invoice do
           attempt_count: non_neg_integer,
           attempted: boolean,
           auto_advance: boolean,
-          billing: String.t() | nil,
           billing_reason: String.t() | nil,
           charge: Stripe.id() | Stripe.Charge.t() | nil,
-          collection_method: String.t(),
+          collection_method: String.t() | nil,
+          created: Stripe.timestamp(),
           currency: String.t(),
+          custom_fields: custom_fields() | nil,
+          customer: Stripe.id() | Stripe.Customer.t(),
           customer_address: Stripe.Types.address() | nil,
           customer_email: String.t() | nil,
           customer_name: String.t() | nil,
@@ -41,19 +43,15 @@ defmodule Stripe.Invoice do
           customer_shipping: Stripe.Types.shipping() | nil,
           customer_tax_exempt: String.t() | nil,
           customer_tax_ids: Stripe.List.t(map) | nil,
-          custom_fields: custom_fields() | nil,
-          customer: Stripe.id() | Stripe.Customer.t(),
-          created: Stripe.timestamp(),
           default_payment_method: String.t() | nil,
           default_source: String.t() | nil,
           default_tax_rates: Stripe.List.t(map) | nil,
+          deleted: boolean | nil,
           description: String.t() | nil,
           discount: Stripe.Discount.t() | nil,
           due_date: Stripe.timestamp() | nil,
           ending_balance: integer | nil,
-          finalized_at: Stripe.timestamp() | nil,
           footer: String.t() | nil,
-          forgiven: boolean,
           hosted_invoice_url: String.t() | nil,
           invoice_pdf: String.t() | nil,
           lines: Stripe.List.t(Stripe.LineItem.t()),
@@ -73,12 +71,23 @@ defmodule Stripe.Invoice do
           status: String.t() | nil,
           status_transitions: status_transitions() | nil,
           subscription: Stripe.id() | Stripe.Subscription.t() | nil,
-          subscription_proration_date: Stripe.timestamp(),
+          subscription_proration_date: Stripe.timestamp() | nil,
           subtotal: integer,
           tax: integer | nil,
           tax_percent: number | nil,
-          total_tax_amounts: Stripe.List.t(map) | nil,
+          threshold_reason:
+            nil
+            | %{
+                amount_gte: integer,
+                item_reasons: [
+                  %{
+                    line_item_ids: [String.t()],
+                    usage_gte: integer
+                  }
+                ]
+              },
           total: integer,
+          total_tax_amounts: Stripe.List.t(map) | nil,
           webhooks_delivered_at: Stripe.timestamp() | nil
         }
 
@@ -89,8 +98,9 @@ defmodule Stripe.Invoice do
           })
 
   @type invoice_settings :: %{
-          custom_fields: custom_fields | nil,
-          footer: String.t() | nil
+          optional(:default_payment_method) => String.t(),
+          optional(:custom_fields) => custom_fields,
+          optional(:footer) => String.t()
         }
 
   @type status_transitions ::
@@ -113,11 +123,13 @@ defmodule Stripe.Invoice do
     :attempt_count,
     :attempted,
     :auto_advance,
-    :billing,
     :billing_reason,
     :charge,
-    :created,
     :collection_method,
+    :created,
+    :currency,
+    :custom_fields,
+    :customer,
     :customer_address,
     :customer_email,
     :customer_name,
@@ -125,19 +137,15 @@ defmodule Stripe.Invoice do
     :customer_shipping,
     :customer_tax_exempt,
     :customer_tax_ids,
-    :currency,
-    :custom_fields,
-    :customer,
     :default_payment_method,
     :default_source,
     :default_tax_rates,
+    :deleted,
     :description,
     :discount,
     :due_date,
     :ending_balance,
-    :finalized_at,
     :footer,
-    :forgiven,
     :hosted_invoice_url,
     :invoice_pdf,
     :lines,
@@ -152,17 +160,18 @@ defmodule Stripe.Invoice do
     :post_payment_credit_notes_amount,
     :pre_payment_credit_notes_amount,
     :receipt_number,
-    :status,
-    :status_transitions,
     :starting_balance,
     :statement_descriptor,
+    :status,
+    :status_transitions,
     :subscription,
     :subscription_proration_date,
     :subtotal,
     :tax,
     :tax_percent,
-    :total_tax_amounts,
+    :threshold_reason,
     :total,
+    :total_tax_amounts,
     :webhooks_delivered_at
   ]
 
@@ -182,7 +191,7 @@ defmodule Stripe.Invoice do
                %{
                  optional(:application_fee_amount) => integer,
                  optional(:auto_advance) => boolean,
-                 optional(:billing) => String.t(),
+                 optional(:collection_method) => String.t(),
                  :customer => Stripe.id() | Stripe.Customer.t(),
                  optional(:custom_fields) => custom_fields,
                  optional(:days_until_due) => integer,
@@ -225,7 +234,7 @@ defmodule Stripe.Invoice do
   Update an invoice.
 
   Takes the `id` and a map of changes. Draft invoices are fully editable. Once
-  an invoice is finalized, monetary values, as well as billing, become
+  an invoice is finalized, monetary values, as well as collection_method, become
   uneditable.
 
   See [Stripe docs](https://stripe.com/docs/api/invoices/update)
@@ -292,7 +301,7 @@ defmodule Stripe.Invoice do
   @spec list(params, Stripe.options()) :: {:ok, Stripe.List.t(t)} | {:error, Stripe.Error.t()}
         when params:
                %{
-                 optional(:billing) => String.t(),
+                 optional(:collection_method) => String.t(),
                  optional(:customer) => Stripe.id() | Stripe.Customer.t(),
                  optional(:created) => Stripe.date_query(),
                  optional(:due_date) => Stripe.timestamp(),
