@@ -308,6 +308,7 @@ defmodule Stripe.Invoice do
                  optional(:ending_before) => t | Stripe.id(),
                  optional(:limit) => 1..100,
                  optional(:starting_after) => t | Stripe.id(),
+                 optional(:status) => String.t(),
                  optional(:subscription) => Stripe.id() | Stripe.Subscription.t()
                }
                | %{}
